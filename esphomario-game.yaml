@@ -1,0 +1,355 @@
+esphome:
+  name: esphomario-game
+  friendly_name: ESPHomario Game Display
+  includes:
+    - esphomario.h
+  on_boot:
+    then:
+      - lambda: 'id(current_page) = 1;'  # Start on game page
+
+esp32:
+  variant: esp32p4
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_USB_HOST_ENABLE: y
+
+ethernet:
+  type: IP101
+  mdc_pin: GPIO31
+  mdio_pin: GPIO52
+  power_pin: GPIO51
+  clk:
+    mode: CLK_EXT_IN
+    pin: GPIO50
+  phy_addr: 1
+  use_address: !secret use_address_wired013
+
+external_components:
+  - source: components
+    components: [usb_hidx, nsf_audio]
+
+logger:
+  level: DEBUG
+  hardware_uart: UART0
+  logs:
+    esphomario: DEBUG
+    sensor: INFO
+    i2c: DEBUG
+    display: DEBUG
+
+api:
+  encryption:
+    key: !secret encryption_key014
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    password: !secret ota_pass014
+
+safe_mode:
+  disabled: true
+
+# USB Host configuration
+usb_host:
+  enable_hubs: true
+
+# USB HIDX Component
+usb_hidx:
+  hub: true
+  keyboard:
+    device_id: keyboard_main
+    layout: us
+  gamepad:
+    device_id: gamepad_main
+    type: generic
+
+# Globals for ESPHomario game
+globals:
+  - id: current_page
+    type: int
+    initial_value: '1'
+  - id: mario_x
+    type: float
+    initial_value: '20.0'
+  - id: mario_y
+    type: float
+    initial_value: '40.0'
+  - id: mario_vy
+    type: float
+    initial_value: '0.0'
+  - id: mario_scroll
+    type: float
+    initial_value: '0.0'
+
+  # USB Gamepad button states
+  - id: usb_gamepad_a
+    type: bool
+    initial_value: 'false'
+  - id: usb_gamepad_b
+    type: bool
+    initial_value: 'false'
+  - id: usb_gamepad_left
+    type: bool
+    initial_value: 'false'
+  - id: usb_gamepad_right
+    type: bool
+    initial_value: 'false'
+  - id: usb_gamepad_down
+    type: bool
+    initial_value: 'false'
+  - id: keyboard_left_pressed
+    type: bool
+    initial_value: 'false'
+  - id: keyboard_right_pressed
+    type: bool
+    initial_value: 'false'
+  - id: keyboard_down_pressed
+    type: bool
+    initial_value: 'false'
+  - id: keyboard_enter_pressed
+    type: bool
+    initial_value: 'false'
+
+
+# I2C for display
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO20
+  frequency: 400kHz
+  scan: true
+
+# NSF Audio (I2S)
+nsf_audio:
+  id: audio
+  bclk_pin: GPIO2
+  lrclk_pin: GPIO6
+  dout_pin: GPIO3
+
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: font_md
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_sm
+    size: 10
+  - file: "gfonts://Roboto"
+    id: font_xxs
+    size: 8
+
+# Display
+display:
+  - platform: ssd1306_i2c
+    model: "SH1106 128x64"
+    address: 0x3C
+    id: display1
+    i2c_id: i2c_bus
+    update_interval: 33ms
+    lambda: |-
+      // Debug button states
+      static int debug_counter = 0;
+      if (++debug_counter % 100 == 0) {
+        ESP_LOGI("game", "Buttons: A=%d B=%d L=%d R=%d D=%d", 
+          id(usb_gamepad_a), id(usb_gamepad_b), id(usb_gamepad_left), 
+          id(usb_gamepad_right), id(usb_gamepad_down));
+      }
+      
+      it.print(0, 0, id(font_md), "Test");
+      auto get_font_md = [&]() { return id(font_md); };
+      auto get_font_sm = [&]() { return id(font_sm); };
+      auto get_font_xxs = [&]() { return id(font_xxs); };
+      auto get_mario_x = [&]() { return id(mario_x); };
+      auto get_mario_y = [&]() { return id(mario_y); };
+      auto get_mario_vy = [&]() { return id(mario_vy); };
+      auto get_mario_scroll = [&]() { return id(mario_scroll); };
+      auto set_mario_x = [&](float v) { id(mario_x) = v; };
+      auto set_mario_y = [&](float v) { id(mario_y) = v; };
+      auto set_mario_vy = [&](float v) { id(mario_vy) = v; };
+      auto set_mario_scroll = [&](float v) { id(mario_scroll) = v; };
+      auto get_btn_left_held = [&]() { return id(usb_gamepad_left) || id(keyboard_left_pressed); };
+      auto get_btn_right_held = [&]() { return id(usb_gamepad_right) || id(keyboard_right_pressed); };
+      auto get_btn_down_held = [&]() { return id(usb_gamepad_a) || id(keyboard_enter_pressed); };
+      auto get_btn_duck_held = [&]() { return id(usb_gamepad_down) || id(keyboard_down_pressed); };
+      auto get_btn_run_held = [&]() { return id(usb_gamepad_b); };
+      auto play_sfx = [&](const char* type) {
+        id(audio).play_sfx(type);
+      };
+      auto play_music = [&](int track) {
+        id(audio).play_music(track);
+      };
+      auto stop_music = [&]() {
+        id(audio).stop_music();
+      };
+      if (id(current_page) == 1) {
+        #define ESPHOMARIO_GAME_LOGIC
+        #include "esphomario.h"
+        #undef ESPHOMARIO_GAME_LOGIC
+      }
+
+button:
+  - platform: restart
+    name: "Restart Game Board"
+
+# Manual control buttons (for testing without remote)
+binary_sensor:
+  # USB Gamepad buttons
+  - platform: usb_hidx
+    name: "Gamepad A Button"
+    id: gamepad_a_sensor
+    internal: true
+    type: gamepad
+    button_a: true
+    on_press:
+      - lambda: |-
+          ESP_LOGI("gamepad", "A button pressed");
+          id(usb_gamepad_a) = true;
+    on_release:
+      - lambda: |-
+          ESP_LOGI("gamepad", "A button released");
+          id(usb_gamepad_a) = false;
+  
+  - platform: usb_hidx
+    name: "Gamepad B Button"
+    id: gamepad_b_sensor
+    internal: true
+    type: gamepad
+    button_b: true
+    on_press:
+      - lambda: |-
+          ESP_LOGI("gamepad", "B button pressed");
+          id(usb_gamepad_b) = true;
+    on_release:
+      - lambda: |-
+          ESP_LOGI("gamepad", "B button released");
+          id(usb_gamepad_b) = false;
+  
+  - platform: usb_hidx
+    name: "Gamepad D-Pad Left"
+    id: gamepad_dpad_left_sensor
+    internal: true
+    type: gamepad
+    dpad_left: true
+    on_press:
+      - lambda: 'id(usb_gamepad_left) = true;'
+    on_release:
+      - lambda: 'id(usb_gamepad_left) = false;'
+  
+  - platform: usb_hidx
+    name: "Gamepad D-Pad Right"
+    id: gamepad_dpad_right_sensor
+    internal: true
+    type: gamepad
+    dpad_right: true
+    on_press:
+      - lambda: 'id(usb_gamepad_right) = true;'
+    on_release:
+      - lambda: 'id(usb_gamepad_right) = false;'
+  
+  - platform: usb_hidx
+    name: "Gamepad D-Pad Down"
+    id: gamepad_dpad_down_sensor
+    internal: true
+    type: gamepad
+    dpad_down: true
+    on_press:
+      - lambda: 'id(usb_gamepad_down) = true;'
+    on_release:
+      - lambda: 'id(usb_gamepad_down) = false;'
+  
+  # Keyboard arrow keys
+  - platform: usb_hidx
+    name: "Keyboard Left Arrow"
+    id: keyboard_left_sensor
+    internal: true
+    type: keyboard
+    key: 0x50
+    on_press:
+      - lambda: 'id(keyboard_left_pressed) = true;'
+    on_release:
+      - lambda: 'id(keyboard_left_pressed) = false;'
+  
+  - platform: usb_hidx
+    name: "Keyboard Right Arrow"
+    id: keyboard_right_sensor
+    internal: true
+    type: keyboard
+    key: 0x4F
+    on_press:
+      - lambda: 'id(keyboard_right_pressed) = true;'
+    on_release:
+      - lambda: 'id(keyboard_right_pressed) = false;'
+  
+  - platform: usb_hidx
+    name: "Keyboard Down Arrow"
+    id: keyboard_down_sensor
+    internal: true
+    type: keyboard
+    key: 0x51
+    on_press:
+      - lambda: 'id(keyboard_down_pressed) = true;'
+    on_release:
+      - lambda: 'id(keyboard_down_pressed) = false;'
+  
+  - platform: usb_hidx
+    name: "Keyboard Enter"
+    id: keyboard_enter_sensor
+    internal: true
+    type: keyboard
+    key: 0x28
+    on_press:
+      - lambda: 'id(keyboard_enter_pressed) = true;'
+    on_release:
+      - lambda: 'id(keyboard_enter_pressed) = false;'
+  
+
+
+# Scripts to call audio services
+script:
+  - id: play_game_sound
+    parameters:
+      sound: string
+    then:
+      - homeassistant.service:
+          service: esphome.esphome_audio_play_sound
+          data:
+            sound: !lambda 'return std::string(sound);'
+
+text_sensor:
+  - platform: template
+    name: "Keyboard Input"
+    id: keyboard_input
+    internal: true
+  
+  - platform: template
+    name: "Game Status"
+    lambda: |-
+      return std::string("ESPHomario Game Running");
+    update_interval: 60s
+  
+  - platform: template
+    name: "Game MAC Address"
+    icon: "mdi:network"
+    lambda: |-
+      uint8_t mac[6];
+      esp_read_mac(mac, ESP_MAC_ETH);
+      char mac_str[18];
+      snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      return std::string(mac_str);
+    update_interval: 60s
+
+sensor:
+  - platform: template
+    name: "Button States"
+    icon: "mdi:gamepad"
+    lambda: |-
+      int state = 0;
+      if (id(usb_gamepad_left) || id(keyboard_left_pressed)) state |= 1;
+      if (id(usb_gamepad_right) || id(keyboard_right_pressed)) state |= 2;
+      if (id(usb_gamepad_a) || id(keyboard_enter_pressed)) state |= 4;
+      return state;
+    update_interval: 100ms
+    filters:
+      - delta: 0.5
