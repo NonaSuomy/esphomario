@@ -79,10 +79,58 @@ Sound effects:
   - `apu.h` - NES APU emulation
   - `sfx_data.h` - Sound effects and music data
 
+## How to rip your own NSF SFX/Music
+
+- Install FCEUX.
+- Search/Download NSF files.
+- Download capture script https://github.com/vlad-the-compiler/pretendo/blob/main/fceux-apu-capture.lua
+- FCEUX -> File -> Load Lua Script -> Browse -> fceux-apu-capture.lua
+- FCEUX -> File -> Play NSF -> select the NSF file you downloaded
+- Make sure you are at the number of sound/song you want to capture but nothing is playing.
+- FCEUX -> File -> Load Lua Script -> Start
+- Push one of the arrow keys to start playing the song/sound you want to capture.
+- Push the S key (Select) to stop the capture.
+- You will now have a header file called apu_capture.h with your lua script.
+
+The console output should look something like this
+```
+Recording started. Press SELECT to capture.
+Searching for loop point in 373 frames...
+Loop point determined at frame 0
+0 frames of data are redundant
+Trimming...
+Done
+Saved to apu_capture.h
+Script ended. Restart to capture new data.
+```
+
+Copy the data out of this file to our sfx_data.h you can change the name of the const byte to whatever you want.
+
+```
+const byte music_bestsong[] PROGMEM = {
+    // Length and loop point offset
+    3, 23, 0, 0,
+    // Region flag: 0 = NTSC (default - change as required), 1 = PAL
+    0,
+    // DMC samples
+    0,
+    // APU frames
+    63, 1, 5, 0, 62, 218, 122, 42, 0, 1,
+    8, 45,
+    40, 47, 0,
+    8, 44,
+    8, 41,
+    8, 38,
+    8, 37,
+};
+```
+
+You can remove a lot of 0's from the start of your recording just remember to change the 2nd value at the top to the amount of values you have in APU frames ie where I put "23" that used to say "133" before removing a lot of 0's. If not your sfx/music will go weird and play other sounds too.
+
 ## Credits
 
 - Game inspired by Super Mario Bros (Nintendo)
-- NSF audio format and music data from various NES homebrew projects
+- NSF audio format and music data from various NES homebrew projects https://github.com/vlad-the-compiler/pretendo
 - Built with ESPHome framework
 
 ## License
