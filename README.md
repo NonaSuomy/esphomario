@@ -1,5 +1,7 @@
 # ESPHomario - Super Mario Bros on ESPHome
 
+https://github.com/user-attachments/assets/9ffaccd7-285f-41bf-8865-c6d787ea51c3
+
 A fully playable Super Mario Bros game running on ESP32 with ESPHome, featuring authentic NES-style audio using a custom NSF audio player.
 
 ## Features
